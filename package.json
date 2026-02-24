@@ -1,0 +1,21 @@
+{
+  "name": "asiste-ing-backend",
+  "version": "1.0.0",
+  "description": "Backend API para Asiste ING S.A.S.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.7.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}
