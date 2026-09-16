@@ -50,6 +50,8 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+
 app.use('/api/contacto', formLimiter, contactoRoutes)
 app.use('/api/empleo',   formLimiter, empleoRoutes)
 app.use('/api/blog',     blogRoutes)

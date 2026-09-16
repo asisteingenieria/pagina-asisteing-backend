@@ -1,8 +1,29 @@
 const express = require('express')
 const jwt     = require('jsonwebtoken')
+const XLSX    = require('xlsx')
 const router  = express.Router()
 const { pool } = require('../db/connection')
 const auth    = require('../middleware/auth')
+const upload  = require('../middleware/upload')
+
+const estadoLabel = {
+  pendiente:    'Pendiente',
+  en_revision:  'En revisión',
+  entrevista:   'Entrevista',
+  seleccionado: 'Seleccionado',
+  descartado:   'Descartado',
+}
+
+function enviarExcel(res, filas, nombreHoja, nombreArchivo) {
+  const hoja = XLSX.utils.json_to_sheet(filas)
+  const libro = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(libro, hoja, nombreHoja)
+  const buffer = XLSX.write(libro, { type: 'buffer', bookType: 'xlsx' })
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`)
+  res.send(buffer)
+}
 
 // POST /api/admin/login
 router.post('/login', (req, res) => {
@@ -53,6 +74,28 @@ router.get('/contactos', auth, async (req, res) => {
   }
 })
 
+// GET /api/admin/contactos/exportar — descargar Excel
+router.get('/contactos/exportar', auth, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT nombre, telefono, email, codigo_postal, mensaje, leido, fecha_creacion FROM contactos ORDER BY fecha_creacion DESC'
+    )
+    const filas = rows.map(c => ({
+      Nombre:         c.nombre,
+      Teléfono:       c.telefono,
+      Email:          c.email,
+      'Código postal': c.codigo_postal,
+      Mensaje:        c.mensaje || '',
+      Estado:         c.leido ? 'Leído' : 'Nuevo',
+      Fecha:          new Date(c.fecha_creacion).toLocaleString('es-CO'),
+    }))
+    enviarExcel(res, filas, 'Contactos', 'contactos.xlsx')
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ ok: false, mensaje: 'Error interno' })
+  }
+})
+
 // PATCH /api/admin/contactos/:id/leido
 router.patch('/contactos/:id/leido', auth, async (req, res) => {
   try {
@@ -83,6 +126,30 @@ router.get('/aspirantes', auth, async (req, res) => {
   }
 })
 
+// GET /api/admin/aspirantes/exportar — descargar Excel
+router.get('/aspirantes/exportar', auth, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT nombre, cedula, edad, telefono1, telefono2, experiencia, estado, notas, fecha_postulacion FROM aspirantes ORDER BY fecha_postulacion DESC'
+    )
+    const filas = rows.map(a => ({
+      Nombre:       a.nombre,
+      Cédula:       a.cedula,
+      Edad:         a.edad,
+      'Teléfono 1': a.telefono1,
+      'Teléfono 2': a.telefono2 || '',
+      Experiencia:  a.experiencia,
+      Estado:       estadoLabel[a.estado] || a.estado,
+      Notas:        a.notas || '',
+      Fecha:        new Date(a.fecha_postulacion).toLocaleString('es-CO'),
+    }))
+    enviarExcel(res, filas, 'Aspirantes', 'aspirantes.xlsx')
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ ok: false, mensaje: 'Error interno' })
+  }
+})
+
 // PATCH /api/admin/aspirantes/:id/estado
 router.patch('/aspirantes/:id/estado', auth, async (req, res) => {
   const estados = ['pendiente', 'en_revision', 'entrevista', 'seleccionado', 'descartado']
@@ -106,6 +173,15 @@ router.delete('/aspirantes/:id', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, mensaje: 'Error interno' })
   }
+})
+
+// POST /api/admin/upload — subir imagen de portada
+router.post('/upload', auth, (req, res) => {
+  upload.single('imagen')(req, res, (err) => {
+    if (err) return res.status(400).json({ ok: false, mensaje: err.message })
+    if (!req.file) return res.status(400).json({ ok: false, mensaje: 'No se envió ninguna imagen' })
+    res.json({ ok: true, url: `/uploads/blog/${req.file.filename}` })
+  })
 })
 
 // GET /api/admin/blog — todos (incl. borradores)
